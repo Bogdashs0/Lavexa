@@ -1,0 +1,252 @@
+from aiogram import Bot, Dispatcher, types
+from aiogram.contrib.middlewares.logging import LoggingMiddleware
+from aiogram.utils import executor
+from aiogram.types import ParseMode
+from datetime import datetime, timedelta
+
+API_TOKEN = '7171247065:AAHPQrjEFh-mXv8uqBK7pw_JLjSRMaKsu_Y'
+
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher(bot)
+dp.middleware.setup(LoggingMiddleware())
+
+user_balances = {}  # Словарь для хранения балансов пользователей
+user_boosts = {}  # Словарь для хранения информации о бустах
+user_last_gift_time = {}  # Словарь для хранения времени последнего получения подарка
+user_completed_tasks = {}  # Словарь для отслеживания выполненных заданий
+user_referral_links = {}  # Словарь для хранения реферальных ссылок
+user_huts = {}  # Словарь для хранения информации о хижинах пользователей
+
+# Функция для создания клавиатуры с заданиями
+def create_tasks_keyboard():
+    keyboard_markup = types.InlineKeyboardMarkup(row_width=2)
+
+    # Создаем кнопки для заданий
+    button1 = types.InlineKeyboardButton(
+        "💜LAVE RU",
+        url="https://t.me/lavefoundation"
+    )
+    button2 = types.InlineKeyboardButton(
+        "💜LAVE Чат",
+        url="https://t.me/lavechats"
+    )
+    button3 = types.InlineKeyboardButton(
+        "💚BARO RU",
+        url="https://t.me/barotoken"
+    )
+
+    # Кнопка "✅" для каждого задания
+    button1_check = types.InlineKeyboardButton("✅", callback_data='check_task_lave_ru')
+    button2_check = types.InlineKeyboardButton("✅", callback_data='check_task_lave_chat')
+    button3_check = types.InlineKeyboardButton("✅", callback_data='check_task_baro_ru')
+
+    button_back = types.InlineKeyboardButton("⬅️", callback_data='back_to_main_menu')
+
+    keyboard_markup.add(button1, button1_check)
+    keyboard_markup.add(button2, button2_check)
+    keyboard_markup.add(button3, button3_check)
+    keyboard_markup.add(button_back)
+
+    return keyboard_markup
+
+
+@dp.message_handler(commands=['start'])
+async def send_welcome(message: types.Message):
+    user = await bot.get_chat_member(message.chat.id, message.from_user.id)
+
+    if user.user.username is None:
+        await message.answer("❌Нельзя использовать бота без @username. Попробуй еще раз.", parse_mode=ParseMode.MARKDOWN)
+    else:
+        user_id = user.user.id
+        if user_id not in user_balances:
+            user_balances[user_id] = 0  # Инициализация баланса для нового пользователя
+        if user_id not in user_boosts:
+            user_boosts[user_id] = 1  # Инициализация буста для нового пользователя
+        if user_id not in user_last_gift_time:
+            user_last_gift_time[user_id] = datetime.now() - timedelta(days=1)  # Инициализация времени последнего подарка
+        if user_id not in user_completed_tasks:
+            user_completed_tasks[user_id] = []  # Инициализация списка выполненных заданий
+        if user_id not in user_referral_links:
+            user_referral_links[user_id] = f"t.me/baronclickbot?start={user_id}"
+        if user_id not in user_huts:
+            user_huts[user_id] = {  # Инициализация хижины для нового пользователя
+                'status': 'Full Boost',
+                'founder': '@lavefoundation',
+                'code': '#LAVE'
+            }
+
+        keyboard_markup = types.InlineKeyboardMarkup(row_width=2)
+        button1 = types.InlineKeyboardButton("⚒Кузница", callback_data='forge_button')
+        button2 = types.InlineKeyboardButton("🛖Рынок Барона", callback_data='market_button')
+        button3 = types.InlineKeyboardButton("🗂Задания", callback_data='tasks_button')
+        button4 = types.InlineKeyboardButton("🤝Рефералы", callback_data='referrals_button')
+        button5 = types.InlineKeyboardButton("⚔Армия Барона", callback_data='army_button') 
+        keyboard_markup.add(button1, button2)
+        keyboard_markup.add(button3, button4)
+        keyboard_markup.add(button5)
+
+        text = f"👋Привет {user.user.first_name}, добро пожаловать на ферму Барона.\n\n⚒Посети Кузницу, приглашай друзей, развлекайся, в конце сезона Барон проведет раздачу, а что и кому он раздаст - никто не знает. Два спойлера: У Барона замечательные подковы, и он очень любит $BARO.\nУвидимся на луне🙂‍↕️"
+        await message.answer(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard_markup)
+
+@dp.callback_query_handler(lambda query: query.data == 'forge_button')
+async def process_forge_button(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    balance = user_balances[user_id]
+    boost = user_boosts[user_id]
+
+    text = f"👋Здравствуй {callback_query.from_user.first_name}, я Бо, один из лучших кузнецов во всем LAVE VERS.\n👨‍🏭Мне нужен помощник для создания новых подков. \n🔥Все проще простого, для создания новых подков тебе просто нужно нажимать на кнопку ниже и смотреть на то, как увеличивается твой баланс.\nТвой баланс: {balance}Ʊ"
+
+    keyboard_markup = types.InlineKeyboardMarkup(row_width=2)
+    button_earn = types.InlineKeyboardButton("Ʊ", callback_data='earn_button')
+    button_back = types.InlineKeyboardButton("⬅️", callback_data='back_to_main_menu')
+    keyboard_markup.add(button_earn, button_back)
+
+    await callback_query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard_markup)
+
+@dp.callback_query_handler(lambda query: query.data == 'earn_button')
+async def process_earn_button(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    user_balances[user_id] += user_boosts[user_id]  # Учитываем буст
+    balance = user_balances[user_id]
+
+    text = f"👋Здравствуй {callback_query.from_user.first_name}, я Бо, один из лучших кузнецов во всем LAVE VERS.\n👨‍🏭Мне нужен помощник для создания новых подков. \n🔥Все проще простого, для создания новых подков тебе просто нужно нажимать на кнопку ниже и смотреть на то, как увеличивается твой баланс.\nТвой баланс: {balance}Ʊ"
+
+    keyboard_markup = types.InlineKeyboardMarkup(row_width=2)
+    button_earn = types.InlineKeyboardButton("Ʊ", callback_data='earn_button')
+    button_back = types.InlineKeyboardButton("⬅️", callback_data='back_to_main_menu')
+    keyboard_markup.add(button_earn, button_back)
+
+    await callback_query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard_markup)
+
+@dp.callback_query_handler(lambda query: query.data == 'back_to_main_menu')
+async def process_back_to_main_menu(callback_query: types.CallbackQuery):
+    await callback_query.answer("Возвращаемся в главное меню")
+    await send_welcome(callback_query.message)
+
+@dp.callback_query_handler(lambda query: query.data == 'market_button')
+async def process_market_button(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    balance = user_balances[user_id]
+    boost = user_boosts[user_id]
+
+    text = "🛖Добро пожаловать на рынок Барона. Здесь ты можешь купить улучшения, чтобы повысить эффективность игрового процесса."
+
+    keyboard_markup = types.InlineKeyboardMarkup(row_width=1)
+
+    if boost == 1:  # Если буст не активирован
+        button1 = types.InlineKeyboardButton("⚡️LAVE Boost| +1Ʊ| 500Ʊ", callback_data='buy_lave_boost')
+        keyboard_markup.add(button1)
+
+    button2 = types.InlineKeyboardButton("💜LAVE Starter| +5Ʊ| 🔒", callback_data='buy_lave_starter')
+    keyboard_markup.add(button2)
+
+    button3 = types.InlineKeyboardButton("🎁 | +500Ʊ", callback_data='get_gift')
+    keyboard_markup.add(button3)
+
+    button_back = types.InlineKeyboardButton("⬅️", callback_data='back_to_main_menu')
+    keyboard_markup.add(button_back)
+
+    await callback_query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard_markup)
+
+@dp.callback_query_handler(lambda query: query.data == 'buy_lave_boost')
+async def process_buy_lave_boost(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    if user_balances[user_id] >= 500:
+        user_balances[user_id] -= 500
+        user_boosts[user_id] = 2  # Устанавливаем буст +2
+        await callback_query.answer("⚡️LAVE Boost активирован! Теперь ты получаешь +2Ʊ за клик.", show_alert=True)
+        await process_market_button(callback_query)  # Обновляем рынок
+    else:
+        await callback_query.answer("Недостаточно подков для покупки LAVE Boost.", show_alert=True)
+
+@dp.callback_query_handler(lambda query: query.data == 'buy_lave_starter')
+async def process_buy_lave_starter(callback_query: types.CallbackQuery):
+    await callback_query.answer("Заблокировано", show_alert=True)
+
+@dp.callback_query_handler(lambda query: query.data == 'get_gift')
+async def process_get_gift(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    last_gift_time = user_last_gift_time[user_id]
+    current_time = datetime.now()
+    if current_time - last_gift_time >= timedelta(days=1):
+        user_balances[user_id] += 500
+        user_last_gift_time[user_id] = current_time
+        await callback_query.answer("🎁Подарок получен!", show_alert=True)
+        await process_market_button(callback_query)  # Обновляем рынок
+    else:
+        time_left = timedelta(days=1) - (current_time - last_gift_time)
+        await callback_query.answer(f"🎁Подарок можно получить через {time_left.seconds // 3600} часов {time_left.seconds % 3600 // 60} минут.", show_alert=True)
+
+@dp.callback_query_handler(lambda query: query.data == 'tasks_button')
+async def process_tasks_button(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    completed_tasks = user_completed_tasks[user_id]
+
+    text = "🗂Список заданий:\n\n"
+    keyboard_markup = create_tasks_keyboard()
+
+    # Проверяем, какие задания уже выполнены
+    if 'check_task_lave_ru' in completed_tasks:
+        keyboard_markup.inline_keyboard[0][1].callback_data = 'task_completed'  # Делаем кнопку неактивной
+    if 'check_task_lave_chat' in completed_tasks:
+        keyboard_markup.inline_keyboard[1][1].callback_data = 'task_completed'
+    if 'check_task_baro_ru' in completed_tasks:
+        keyboard_markup.inline_keyboard[2][1].callback_data = 'task_completed'
+
+    await callback_query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard_markup)
+
+@dp.callback_query_handler(lambda query: query.data.startswith('check_task_'))
+async def process_check_task(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    task_name = callback_query.data.split('_')[-1]
+    if task_name not in user_completed_tasks[user_id]:
+        user_completed_tasks[user_id].append(task_name)
+        user_balances[user_id] += 500  # Начисляем подковы за задание
+        await callback_query.answer("✅Задание выполнено! Теперь ты можешь переходить к следующему.", show_alert=True)
+        await process_tasks_button(callback_query)  # Обновляем список заданий
+    else:
+        await callback_query.answer("✅Задание уже выполнено.", show_alert=True)
+
+@dp.callback_query_handler(lambda query: query.data == 'task_completed')
+async def process_completed_task(callback_query: types.CallbackQuery):
+    await callback_query.answer("✅Задание уже выполнено.", show_alert=True)
+
+@dp.callback_query_handler(lambda query: query.data == 'referrals_button')
+async def process_referrals_button(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    referral_link = user_referral_links[user_id]
+    text = f"🐴Реферальная система\n\n🐴Рефералы - это достаточно важный фактор, который отличает реального пользователя от бота.\n\n❓Есть друзья? - приглашай их к нам.\n\n🔗Ссылка: {referral_link}"
+    keyboard_markup = types.InlineKeyboardMarkup(row_width=1)
+    button_back = types.InlineKeyboardButton("⬅️", callback_data='back_to_main_menu')
+    keyboard_markup.add(button_back)
+    await callback_query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard_markup)
+
+@dp.callback_query_handler(lambda query: query.data == 'army_button')
+async def process_army_button(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    hut = user_huts[user_id]
+
+    if hut is not None:
+        text = f"🛖Хижина Барона🌬\n⬆️Статус хижины: {hut['status']}\n🐴Основатель: {hut['founder']}\n🔑Код: {hut['code']}"
+        keyboard_markup = types.InlineKeyboardMarkup(row_width=1)
+        button1 = types.InlineKeyboardButton("Отправить 🍎", callback_data='send_apple')
+        button2 = types.InlineKeyboardButton("🚶Выйти", callback_data='leave_hut')
+        button3 = types.InlineKeyboardButton("⬅️", callback_data='back_to_main_menu')
+        keyboard_markup.add(button1, button2, button3)
+        await callback_query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard_markup)
+    else:
+        await callback_query.answer("❌Ты не состоишь в какой-либо хижине.", show_alert=True)
+
+@dp.callback_query_handler(lambda query: query.data == 'send_apple')
+async def process_send_apple(callback_query: types.CallbackQuery):
+    await callback_query.answer("Яблоко Хижине успешно отправлено🍎")
+
+@dp.callback_query_handler(lambda query: query.data == 'leave_hut')
+async def process_leave_hut(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    user_huts[user_id] = None
+    await callback_query.message.delete()
+    await callback_query.message.answer("Создателем хижины являлся сам Барон, твой рейтинг понижен до 0🔻", parse_mode=ParseMode.MARKDOWN)
+
+if __name__ == '__main__':
+    executor.start_polling(dp, skip_updates=True)
